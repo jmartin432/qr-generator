@@ -1,0 +1,20 @@
+{
+  "name": "qr-generator",
+  "version": "1.0.0",
+  "description": "A QR Code Generating API",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "create-stack": "sh scripts/create-stack.sh"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/jmartin432/qr-generator.git"
+  },
+  "author": "Justin L. Martin",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/jmartin432/qr-generator/issues"
+  },
+  "homepage": "https://github.com/jmartin432/qr-generator#readme"
+}
