@@ -142,6 +142,10 @@ Resources:
         S3Key: !Sub ${TimeStamp}/qr-generator-lambda.zip
       FunctionName: qr-generator-lambda
       Handler: qr-generator-lambda.handler
+      Environment:
+        Variables:
+          QRCodeBucketName: !Ref QRCodeBucketName
+          QRCodeBucketUrl: !GetAtt QRCodeBucket.WebsiteURL
       MemorySize: 128
       Role: !GetAtt LambdaRole.Arn
       Runtime: python3.8
@@ -156,28 +160,9 @@ Resources:
       - CloudWatchRole
       - ApiAccount
     Properties:
-#      ApiKeySourceType: String
-#      BinaryMediaTypes:
-#        - String
-#      Body: Json
-#      BodyS3Location:
-#        S3Location
-#      CloneFrom: String
-#      Description: String
-#      DisableExecuteApiEndpoint: Boolean
-#      EndpointConfiguration:
-#        EndpointConfiguration
-#      FailOnWarnings: Boolean
-#      MinimumCompressionSize: Integer
-#      Mode: String
       Name: qr-generator-api
-#      Parameters:
-#        Key: Value
-#      Policy: Json
-#      Tags:
-#        - Tag
 
-  CreateResource:
+  RootResource:
     Type: AWS::ApiGateway::Resource
     DependsOn:
       - QRGeneratorApi
@@ -185,61 +170,85 @@ Resources:
       ParentId: !GetAtt
         - QRGeneratorApi
         - RootResourceId
-      PathPart: create
+      PathPart: '{proxy+}'
       RestApiId: !Ref QRGeneratorApi
 
-  CreatePostMethod:
-    Type: AWS::ApiGateway::Method
+#  RootMethod:
+#    Type: AWS::ApiGateway::Method
+#    DependsOn:
+#      - QRGeneratorApi
+#      - RootResource
+#    Properties:
+#      ResourceId: !Ref RootResource
+#      RestApiId: !Ref QRGeneratorApi
+#      ApiKeyRequired: False
+#      AuthorizationType: NONE
+#      HttpMethod: ANY
+#      RequestParameters:
+#        method.request.body: TRUE
+#      Integration:
+#        TimeoutInMillis: 10000
+#        Type: AWS_PROXY
+#        Uri: !Sub
+#          - arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${lambdaArn}/invocations
+#          - lambdaArn: !GetAtt QRGeneratorLambda.Arn
+#        PassthroughBehavior: WHEN_NO_MATCH
+#        IntegrationHttpMethod: ANY
+##        RequestParameters:
+##          integration.request.header.body : method.request.body
+#        IntegrationResponses:
+#          - StatusCode: 200
+##            ResponseParameters:
+##              method.response.header.body : integration.response.body
+#      MethodResponses:
+#        - StatusCode: 200
+##          ResponseParameters:
+##            method.response.header.body : TRUE
+
+  ProxyMethod:
+    Type: 'AWS::ApiGateway::Method'
     DependsOn:
       - QRGeneratorApi
-      - CreateResource
+      - RootResource
     Properties:
-      ApiKeyRequired: False
-#      AuthorizationScopes:
-#        - String
+      HttpMethod: ANY
+      ResourceId: !Ref RootResource
+      RestApiId: !Ref QRGeneratorApi
+      ApiKeyRequired: True
       AuthorizationType: NONE
-#      AuthorizerId: String
-      HttpMethod: POST
-#      RequestModels:
-#      RequestParameters:
-#        method:request:header:test-header: TRUE
+      RequestParameters:
+        method.request.path.proxy: true
       Integration:
-        TimeoutInMillis: 10000
-        Type: AWS
+        CacheKeyParameters:
+          - 'method.request.path.proxy'
+        RequestParameters:
+          integration.request.path.proxy: 'method.request.path.proxy'
+        IntegrationHttpMethod: ANY
+        Type: AWS_PROXY
         Uri: !Sub
           - arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${lambdaArn}/invocations
           - lambdaArn: !GetAtt QRGeneratorLambda.Arn
-#        CacheKeyParameters:
-#          - String
-#        CacheNamespace: String
-#        ConnectionId: String
-#        ConnectionType: String
-#        ContentHandling: String
-#        Credentials: String
-        IntegrationHttpMethod: POST
+        PassthroughBehavior: WHEN_NO_MATCH
         IntegrationResponses:
           - StatusCode: 200
-            ResponseParameters:
-              method.response.header.body : integration.response.body
-            #              Key: Value
-            #          SelectionPattern: "200.*"
+#            ResponseParameters:
+#              method.response.header.body : integration.response.body
 
-#          - ContentHandling: String
-#            ResponseTemplates:
-#              Key: Value
-#            SelectionPattern: String
-#        PassthroughBehavior: String
-#        RequestTemplates:
-#          Key : Value
-      MethodResponses:
-        - StatusCode: 200
-          ResponseParameters:
-            method.response.header.body : TRUE
-#      RequestModels:
-#        Key: Value
-      ResourceId: !Ref CreateResource
+  ApiGatewayDevDeployment:
+    Type: AWS::ApiGateway::Deployment
+    DependsOn:
+      - ProxyMethod
+      - QRGeneratorApiLogGroup
+    Properties:
       RestApiId: !Ref QRGeneratorApi
+      StageName: dev
+      StageDescription:
+        AccessLogSetting:
+          DestinationArn: !GetAtt QRGeneratorApiLogGroup.Arn
+          Format: "$context.extendedRequestId : '$context.integrationErrorMessage'"
+        LoggingLevel: INFO
 
+#API KEY
   QRGeneratorApiKey:
     Type: AWS::ApiGateway::ApiKey
     DependsOn:
@@ -260,6 +269,8 @@ Resources:
 
   QRGeneratorUsagePlan:
     Type: AWS::ApiGateway::UsagePlan
+    DependsOn:
+      - ApiGatewayDevDeployment
     Properties:
       ApiStages:
         - ApiId: !Ref QRGeneratorApi
@@ -277,24 +288,12 @@ Resources:
 
   DevUsagePlanKey:
     Type: 'AWS::ApiGateway::UsagePlanKey'
+    DependsOn:
+      - ApiGatewayDevDeployment
     Properties:
       KeyId: !Ref QRGeneratorApiKey
       KeyType: API_KEY
       UsagePlanId: !Ref QRGeneratorUsagePlan
-
-  apiGatewayDevDeployment:
-    Type: AWS::ApiGateway::Deployment
-    DependsOn:
-      - CreatePostMethod
-      - QRGeneratorApiLogGroup
-    Properties:
-      RestApiId: !Ref QRGeneratorApi
-      StageName: dev
-      StageDescription:
-        AccessLogSetting:
-          DestinationArn: !GetAtt QRGeneratorApiLogGroup.Arn
-          Format: "$context.extendedRequestId : '$context.integrationErrorMessage'"
-        LoggingLevel: INFO
 
   LambdaApiGatewayInvokePermission:
     Type: AWS::Lambda::Permission
@@ -303,7 +302,7 @@ Resources:
       FunctionName: !GetAtt QRGeneratorLambda.Arn
       Principal: apigateway.amazonaws.com
       SourceArn: !Sub
-        - arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${apiGatewayId}/*/POST/create
+        - arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${apiGatewayId}/*/*
         - apiGatewayId: !Ref QRGeneratorApi
 
 
@@ -316,8 +315,10 @@ Outputs:
     Value: !Ref QRGeneratorApiKey
   ApiId:
     Value: !Ref QRGeneratorApi
-  CreateResourceId:
-    Value: !Ref CreateResource
+  RootResourceId:
+    Value: !Ref RootResource
+  QRCodeBucketUrl:
+    Value: !GetAtt QRCodeBucket.WebsiteURL
 
 
 

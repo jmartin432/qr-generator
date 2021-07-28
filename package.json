@@ -6,7 +6,8 @@
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
     "create-stack": "sh scripts/create-stack.sh",
-    "update-stack": "sh scripts/update-stack.sh"
+    "update-stack": "sh scripts/update-stack.sh",
+    "delete-stack": "sh scripts/delete-stack.sh"
   },
   "repository": {
     "type": "git",
