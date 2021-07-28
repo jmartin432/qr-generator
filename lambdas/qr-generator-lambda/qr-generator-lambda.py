@@ -9,10 +9,13 @@ logger.setLevel(logging.INFO)
 def handler(event, context):
     logger.info(event)
 
-    status = "Success"
-
-    value = {
-        "status": status
+    message = {
+        'status': 'Success'
+    }
+    response = {
+        'statusCode': 200,
+        'headers': {'Content-Type': 'application/json'},
+        'body': json.dumps(message)
     }
 
-    return json.dumps(value)
+    return response
