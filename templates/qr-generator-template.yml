@@ -1,0 +1,439 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: A QR Code Generating Api
+
+# Add CodeBuild
+# Add Log Stream
+
+Parameters:
+  Region:
+    Type: String
+    Default: us-east-1
+  TimeStamp:
+    Type: String
+  AccountId:
+    Type: String
+    Default: '{{resolve:secretsmanager:account-id:SecretString:account-id:1}}'
+  BranchName:
+    Description: github branch name
+    Type: String
+    Default: master
+  GitHubOwner:
+    Type: String
+    Default: jmartin432
+  Email:
+    Type: String
+    Default: info@justinlmartin.com
+#  ArtifactBucketName:
+#    Type: String
+#    Default: '{{resolve:ssm:static-sites-pipeline-artifacts-bucket:1}}'
+#  DeploymentBucketDevName:
+#    Type: String
+#    Default: '{{resolve:ssm:static-sites-pipeline-deployment-dev-bucket:1}}'
+#  DeploymentBucketProdName:
+#    Type: String
+#    Default: '{{resolve:ssm:static-sites-pipeline-deployment-prod-bucket:1}}'
+  LambdasBucketName:
+    Type: String
+    Default: '{{resolve:ssm:qr-generator-lambdas-bucket:1}}'
+#  SlackWebHookPath:
+#    Type: String
+#    Default: '{{resolve:secretsmanager:slack-webhook-paths:SecretString:static-sites-pipeline}}'
+#  StaticSitesCdnDevId:
+#    Type: String
+#    Default: '{{resolve:ssm:static-sites-cdn-dev-id:2}}'
+#  StaticSitesCdnProdId:
+#    Type: String
+#    Default: '{{resolve:ssm:static-sites-cdn-prod-id:1}}'
+
+Resources:
+
+# Buckets
+
+#  ArtifactStoreBucket:
+#    Type: AWS::S3::Bucket
+#    Properties:
+#      BucketName: !Ref ArtifactBucketName
+#      VersioningConfiguration:
+#        Status: Enabled
+#      BucketEncryption:
+#        ServerSideEncryptionConfiguration:
+#          - ServerSideEncryptionByDefault:
+#              SSEAlgorithm: AES256
+#
+#  DeploymentBucketDev:
+#    Type: AWS::S3::Bucket
+#    Properties:
+#      BucketName: !Ref DeploymentBucketDevName
+#      VersioningConfiguration:
+#        Status: Enabled
+#      BucketEncryption:
+#        ServerSideEncryptionConfiguration:
+#          - ServerSideEncryptionByDefault:
+#              SSEAlgorithm: AES256
+#
+#  DeploymentBucketProd:
+#    Type: AWS::S3::Bucket
+#    Properties:
+#      BucketName: !Ref DeploymentBucketProdName
+#      VersioningConfiguration:
+#        Status: Enabled
+#      BucketEncryption:
+#        ServerSideEncryptionConfiguration:
+#          - ServerSideEncryptionByDefault:
+#              SSEAlgorithm: AES256
+
+  LambdasBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Ref LambdasBucketName
+      VersioningConfiguration:
+        Status: Enabled
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+
+  # SNS
+#
+#  PipelineStatusTopic:
+#    Type: AWS::SNS::Topic
+#    Properties:
+#      DisplayName: Static Sites Pipeline Status Topic
+#      TopicName: static-sites-pipeline-sns-topic
+#
+#  SlackRouterPipelineStatusSubscription:
+#    Type: AWS::SNS::Subscription
+#    Properties:
+#      Endpoint: !GetAtt SlackRouterLambda.Arn
+#      Protocol: lambda
+#      Region: !Ref Region
+#      TopicArn: !Ref PipelineStatusTopic
+#    DependsOn:
+#      - SlackRouterLambda
+#
+#  CacheInvalidationTopic:
+#    Type: AWS::SNS::Topic
+#    Properties:
+#      DisplayName: Static Sites Pipeline Cache Invalidation Topic
+#      TopicName: static-sites-pipeline-cache-invalidation-topic
+#
+#  CacheInvalidationLambdaTopicSubription:
+#    Type: AWS::SNS::Subscription
+#    Properties:
+#      Endpoint: !GetAtt CacheInvalidationLambda.Arn
+#      Protocol: lambda
+#      Region: !Ref Region
+#      TopicArn: !Ref CacheInvalidationTopic
+#    DependsOn:
+#      - CacheInvalidationLambda
+
+# Rules
+
+#  CodeBuildSuccessRule:
+#    Type: AWS::Events::Rule
+#    Properties:
+#      Description: Static Sites Events Rule for CodeBuild Success
+#      EventPattern:
+#        source:
+#          - aws.codebuild
+#        detail-type:
+#          - CodeBuild Build State Change
+#        detail:
+#          build-status:
+#            - SUCCEEDED
+#      Name: static-sites-pipleline-codebuild-success-rule
+#      RoleArn: !GetAtt EventsRuleRole.Arn
+#      State: ENABLED
+#      Targets:
+#        - Arn: !GetAtt DeployLambda.Arn
+#          Id: deploy_lambda
+#    DependsOn:
+#      - DeployLambda
+#
+#  CodeBuildStateChangeRule:
+#    Type: AWS::Events::Rule
+#    Properties:
+#      Description: Static Sites Events Rule for CodeBuild State Change
+#      EventPattern:
+#        source:
+#          - aws.codebuild
+#        detail-type:
+#          - CodeBuild Build State Change
+#      Name: static-sites-pipleline-codebuild-state-change-rule
+#      RoleArn: !GetAtt EventsRuleRole.Arn
+#      State: ENABLED
+#      Targets:
+#        - Arn: !GetAtt SlackRouterLambda.Arn
+#          Id: slack_router_lambda
+#    DependsOn:
+#      - SlackRouterLambda
+
+# Lambdas
+
+  QRGeneratorLambda:
+    Type: AWS::Lambda::Function
+    Properties:
+      Code:
+        S3Bucket: !Ref LambdasBucketName
+        S3Key: !Sub ${TimeStamp}/qr-generator-lambda.zip
+      FunctionName: qr-generator-lambda
+      Handler: qr-generator-lambda.handler
+      MemorySize: 128
+      Role: !GetAtt LambdaRole.Arn
+      Runtime: python3.8
+      Timeout: 5
+      Description: Generates QR Code
+    DependsOn:
+      - LambdaRole
+
+  QRGeneratorApi:
+    Type: AWS::ApiGateway::RestApi
+    Properties:
+#      ApiKeySourceType: String
+#      BinaryMediaTypes:
+#        - String
+#      Body: Json
+#      BodyS3Location:
+#        S3Location
+#      CloneFrom: String
+#      Description: String
+#      DisableExecuteApiEndpoint: Boolean
+#      EndpointConfiguration:
+#        EndpointConfiguration
+#      FailOnWarnings: Boolean
+#      MinimumCompressionSize: Integer
+#      Mode: String
+      Name: qr-generator-api
+#      Parameters:
+#        Key: Value
+#      Policy: Json
+#      Tags:
+#        - Tag
+
+  CreateResource:
+    Type: AWS::ApiGateway::Resource
+    DependsOn:
+      - QRGeneratorApi
+    Properties:
+      ParentId: !GetAtt
+        - QRGeneratorApi
+        - RootResourceId
+      PathPart: create
+      RestApiId: !Ref QRGeneratorApi
+
+  CreatePostMethod:
+    Type: AWS::ApiGateway::Method
+    DependsOn:
+      - QRGeneratorApi
+      - CreateResource
+    Properties:
+      ApiKeyRequired: False
+#      AuthorizationScopes:
+#        - String
+      AuthorizationType: NONE
+#      AuthorizerId: String
+      HttpMethod: POST
+      Integration:
+#        CacheKeyParameters:
+#          - String
+#        CacheNamespace: String
+#        ConnectionId: String
+#        ConnectionType: String
+#        ContentHandling: String
+#        Credentials: String
+        IntegrationHttpMethod: POST
+#        IntegrationResponses:
+#          - IntegrationResponse
+#        PassthroughBehavior: String
+#        RequestParameters:
+#          Key : Value
+#        RequestTemplates:
+#          Key : Value
+        TimeoutInMillis: 10000
+        Type: AWS
+        Uri: !Sub
+             - arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${lambdaArn}/invocations
+             - lambdaArn: !GetAtt QRGeneratorLambda.Arn
+#      MethodResponses:
+#        - MethodResponse
+#      OperationName: String
+#      RequestModels:
+#        Key: Value
+#      RequestParameters:
+#        Key: Value
+#      RequestValidatorId: String
+      ResourceId: !Ref CreateResource
+      RestApiId: !Ref QRGeneratorApi
+
+  QRGeneratorApiKey:
+    Type: AWS::ApiGateway::ApiKey
+    DependsOn:
+      - QRGeneratorApi
+    Properties:
+#      CustomerId: String
+#      Description: String
+      Enabled: True
+#      GenerateDistinctId: Boolean
+      Name: qr-generator-dev-key
+#      StageKeys:
+#        - RestApiId: !Ref QRGeneratorApi
+#          StageName: dev
+
+  #      Tags:
+#        - Tag
+#      Value: String
+
+  QRGeneratorUsagePlan:
+    Type: AWS::ApiGateway::UsagePlan
+    Properties:
+      ApiStages:
+        - ApiId: !Ref QRGeneratorApi
+          Stage: dev
+#            Throttle:
+#              Key: Value
+#      Description: String
+#      Quota:
+#        QuotaSettings
+#      Tags:
+#        - Tag
+#      Throttle:
+#        ThrottleSettings
+      UsagePlanName: qr-generator-dev-usage-plan
+
+  DevUsagePlanKey:
+    Type: 'AWS::ApiGateway::UsagePlanKey'
+    Properties:
+      KeyId: !Ref QRGeneratorApiKey
+      KeyType: API_KEY
+      UsagePlanId: !Ref QRGeneratorUsagePlan
+
+
+  apiGatewayDevDeployment:
+    Type: AWS::ApiGateway::Deployment
+    DependsOn:
+      - CreatePostMethod
+    Properties:
+      RestApiId: !Ref QRGeneratorApi
+      StageName: dev
+
+  LambdaApiGatewayInvokePermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      Action: lambda:InvokeFunction
+      FunctionName: !GetAtt QRGeneratorLambda.Arn
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub
+        - arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${apiGatewayId}/*/POST/create
+        - apiGatewayId: !Ref QRGeneratorApi
+
+# Roles
+
+  LambdaRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: qr-generator-lambda-role
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - lambda.amazonaws.com
+            Action:
+              - sts:AssumeRole
+      Policies:
+        - PolicyName: qr-generator-lambda-policy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Sid: AllowLogging
+                Effect: Allow
+                Action:
+                  - 'logs:CreateLogStream'
+                  - 'logs:PutLogEvents'
+                  - 'logs:CreateLogGroup'
+                  - 'logs:DescribeLogStreams'
+                Resource:
+                  - '*'
+#              - Sid: AllowS3Access
+#                Effect: Allow
+#                Action:
+#                  - s3:*
+#                Resource:
+#                  - !Sub arn:aws:s3:::${DeploymentBucketDevName}/*
+#                  - !Sub arn:aws:s3:::${DeploymentBucketProdName}/*
+#                  - !Sub arn:aws:s3:::${ArtifactBucketName}/*
+#              - Sid: AllowSnsPublish
+#                Effect: Allow
+#                Action:
+#                  - 'sns:Publish'
+#                Resource:
+#                  - '*'
+#              - Sid: AllowCacheInvalidation
+#                Effect: Allow
+#                Action:
+#                  - 'cloudfront:CreateInvalidation'
+#                Resource:
+#                  - '*'
+      Path: "/"
+
+
+Outputs:
+  LatestTimeStamp:
+    Value: !Ref TimeStamp
+  ApiKeyId:
+    Value: !Ref QRGeneratorApiKey
+  ApiId:
+    Value: !Ref QRGeneratorApi
+  CreateResourceId:
+    Value: !Ref CreateResource
+
+
+
+
+#    SlackRouterLambdaCodeBuildEventTriggerPermission:
+    #    Type: AWS::Lambda::Permission
+    #    Properties:
+    #      Action: 'lambda:InvokeFunction'
+    #      FunctionName: !Ref SlackRouterLambda
+    #      Principal: 'events.amazonaws.com'
+    #      SourceArn: !GetAtt CodeBuildStateChangeRule.Arn
+    #    DependsOn:
+    #      - SlackRouterLambda
+
+    #  SlackRouterLambdaSnsTriggerPermission:
+    #    Type: AWS::Lambda::Permission
+    #    Properties:
+    #      Action: 'lambda:InvokeFunction'
+    #      FunctionName: !Ref SlackRouterLambda
+    #      Principal: 'sns.amazonaws.com'
+    #      SourceArn: !Ref PipelineStatusTopic
+    #    DependsOn:
+    #      - SlackRouterLambda
+
+
+    #  EventsRuleRole:
+    #    Type: AWS::IAM::Role
+    #    Properties:
+    #      RoleName: static-sites-pipeline-events-rule-role
+    #      AssumeRolePolicyDocument:
+    #        Version: '2012-10-17'
+    #        Statement:
+    #          - Effect: Allow
+    #            Principal:
+    #              Service:
+    #                - events.amazonaws.com
+    #            Action:
+    #              - sts:AssumeRole
+    #      Policies:
+    #        - PolicyName: static-sites-pipeline-events-rule-policy
+    #          PolicyDocument:
+    #            Version: '2012-10-17'
+    #            Statement:
+    #              - Sid: AllowLambdaInvoke
+    #                Effect: Allow
+    #                Action:
+    #                  - 'lambda:InvokeFunction'
+    #                Resource:
+    #                  - '*'
+    #      Path: "/"

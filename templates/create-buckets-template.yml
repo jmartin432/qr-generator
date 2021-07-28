@@ -9,7 +9,7 @@ Parameters:
     Type: String
   AccountId:
     Type: String
-    Default: '{{resolve:secretsmanager:slack-webhook-paths:SecretString:static-sites-pipeline:1}}'
+    Default: '{{resolve:secretsmanager:account-id:SecretString:account-id:1}}'
   BranchName:
     Description: github branch name
     Type: String

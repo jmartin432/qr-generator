@@ -117,3 +117,4 @@ dist
 .yarn/install-state.gz
 .pnp.*
 /scripts/
+/lambdas/qr-generator-lambda/dependencies/

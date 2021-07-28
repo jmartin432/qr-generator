@@ -5,7 +5,8 @@
   "main": "index.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
-    "create-stack": "sh scripts/create-stack.sh"
+    "create-stack": "sh scripts/create-stack.sh",
+    "update-stack": "sh scripts/update-stack.sh"
   },
   "repository": {
     "type": "git",
