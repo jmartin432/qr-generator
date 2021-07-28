@@ -26,6 +26,9 @@ Parameters:
   LambdasBucketName:
     Type: String
     Default: '{{resolve:ssm:qr-generator-lambdas-bucket:1}}'
+  QRCodeBucketName:
+    Type: String
+    Default: '{{resolve:ssm:qr-generator-qrcodes-bucket:1}}'
 
 Resources:
 
@@ -34,6 +37,17 @@ Resources:
     Type: AWS::S3::Bucket
     Properties:
       BucketName: !Ref LambdasBucketName
+      VersioningConfiguration:
+        Status: Enabled
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+
+  QRCodeBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Ref QRCodeBucketName
       VersioningConfiguration:
         Status: Enabled
       BucketEncryption:
@@ -92,14 +106,12 @@ Resources:
                   - 'logs:DescribeLogStreams'
                 Resource:
                   - '*'
-#              - Sid: AllowS3Access
-#                Effect: Allow
-#                Action:
-#                  - s3:*
-#                Resource:
-#                  - !Sub arn:aws:s3:::${DeploymentBucketDevName}/*
-#                  - !Sub arn:aws:s3:::${DeploymentBucketProdName}/*
-#                  - !Sub arn:aws:s3:::${ArtifactBucketName}/*
+              - Sid: AllowS3Access
+                Effect: Allow
+                Action:
+                  - s3:*
+                Resource:
+                  - !Sub arn:aws:s3:::${QRCodeBucketName}/*
 #              - Sid: AllowSnsPublish
 #                Effect: Allow
 #                Action:
