@@ -32,29 +32,6 @@ Parameters:
 
 Resources:
 
-#Buckets
-  LambdasBucket:
-    Type: AWS::S3::Bucket
-    Properties:
-      BucketName: !Ref LambdasBucketName
-      VersioningConfiguration:
-        Status: Enabled
-      BucketEncryption:
-        ServerSideEncryptionConfiguration:
-          - ServerSideEncryptionByDefault:
-              SSEAlgorithm: AES256
-
-  QRCodeBucket:
-    Type: AWS::S3::Bucket
-    Properties:
-      BucketName: !Ref QRCodeBucketName
-      VersioningConfiguration:
-        Status: Enabled
-      BucketEncryption:
-        ServerSideEncryptionConfiguration:
-          - ServerSideEncryptionByDefault:
-              SSEAlgorithm: AES256
-
 #Roles
   CloudWatchRole:
     Type: 'AWS::IAM::Role'
@@ -126,14 +103,50 @@ Resources:
 #                  - '*'
       Path: "/"
 
-#LogGroups
-  QRGeneratorApiLogGroup:
-    Type: AWS::Logs::LogGroup
+#Buckets
+  LambdasBucket:
+    Type: AWS::S3::Bucket
     Properties:
-      LogGroupName: qr-generator-api-log-group
-      RetentionInDays: 14
+      BucketName: !Ref LambdasBucketName
+      VersioningConfiguration:
+        Status: Enabled
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
 
-#Lambdas
+  QRCodeBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Ref QRCodeBucketName
+      VersioningConfiguration:
+        Status: Enabled
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+
+  QRCodeBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    DependsOn:
+      - QRCodeBucket
+    Properties:
+      Bucket: !Ref QRCodeBucketName
+      PolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Sid: AllowGetPublicObjects
+            Effect: Allow
+            Principal: "*"
+            Action: s3:GetObject
+            Resource: !Sub
+              - ${bucketArn}/*
+              - bucketArn: !GetAtt QRCodeBucket.Arn
+            Condition:
+              StringEquals:
+                "s3:ExistingObjectTag/public": "yes"
+
+  #Lambdas
   QRGeneratorLambda:
     Type: AWS::Lambda::Function
     Properties:
@@ -145,7 +158,6 @@ Resources:
       Environment:
         Variables:
           QRCodeBucketName: !Ref QRCodeBucketName
-          QRCodeBucketUrl: !GetAtt QRCodeBucket.WebsiteURL
       MemorySize: 128
       Role: !GetAtt LambdaRole.Arn
       Runtime: python3.8
@@ -230,7 +242,8 @@ Resources:
           - lambdaArn: !GetAtt QRGeneratorLambda.Arn
         PassthroughBehavior: WHEN_NO_MATCH
         IntegrationResponses:
-          - StatusCode: 200
+          - SelectionPattern: ""
+            StatusCode: 200
 #            ResponseParameters:
 #              method.response.header.body : integration.response.body
 
@@ -238,36 +251,46 @@ Resources:
     Type: AWS::ApiGateway::Deployment
     DependsOn:
       - ProxyMethod
-      - QRGeneratorApiLogGroup
     Properties:
       RestApiId: !Ref QRGeneratorApi
       StageName: dev
       StageDescription:
-        AccessLogSetting:
-          DestinationArn: !GetAtt QRGeneratorApiLogGroup.Arn
-          Format: "$context.extendedRequestId : '$context.integrationErrorMessage'"
+#        AccessLogSetting:
+#          DestinationArn: !GetAtt QRGeneratorApiLogGroup.Arn
+#          Format: "$context.extendedRequestId : '$context.integrationErrorMessage'"
         LoggingLevel: INFO
 
+  ApiGatewayProdDeployment:
+    Type: AWS::ApiGateway::Deployment
+    DependsOn:
+      - ProxyMethod
+    Properties:
+      RestApiId: !Ref QRGeneratorApi
+      StageName: prod
+      StageDescription:
+#        AccessLogSetting:
+#          DestinationArn: !GetAtt QRGeneratorApiLogGroup.Arn
+#          Format: "$context.extendedRequestId : '$context.integrationErrorMessage'"
+        LoggingLevel: ERROR
+
 #API KEY
-  QRGeneratorApiKey:
+  QRGeneratorDevApiKey:
     Type: AWS::ApiGateway::ApiKey
     DependsOn:
       - QRGeneratorApi
     Properties:
-#      CustomerId: String
-#      Description: String
       Enabled: True
-#      GenerateDistinctId: Boolean
       Name: qr-generator-dev-key
-#      StageKeys:
-#        - RestApiId: !Ref QRGeneratorApi
-#          StageName: dev
 
-  #      Tags:
-#        - Tag
-#      Value: String
+  QRGeneratorProdApiKey:
+    Type: AWS::ApiGateway::ApiKey
+    DependsOn:
+      - QRGeneratorApi
+    Properties:
+      Enabled: True
+      Name: qr-generator-prod-key
 
-  QRGeneratorUsagePlan:
+  QRGeneratorDevUsagePlan:
     Type: AWS::ApiGateway::UsagePlan
     DependsOn:
       - ApiGatewayDevDeployment
@@ -275,25 +298,35 @@ Resources:
       ApiStages:
         - ApiId: !Ref QRGeneratorApi
           Stage: dev
-#            Throttle:
-#              Key: Value
-#      Description: String
-#      Quota:
-#        QuotaSettings
-#      Tags:
-#        - Tag
-#      Throttle:
-#        ThrottleSettings
       UsagePlanName: qr-generator-dev-usage-plan
+
+  QRGeneratorProdUsagePlan:
+    Type: AWS::ApiGateway::UsagePlan
+    DependsOn:
+      - ApiGatewayDevDeployment
+    Properties:
+      ApiStages:
+        - ApiId: !Ref QRGeneratorApi
+          Stage: prod
+      UsagePlanName: qr-generator-prod-usage-plan
 
   DevUsagePlanKey:
     Type: 'AWS::ApiGateway::UsagePlanKey'
     DependsOn:
       - ApiGatewayDevDeployment
     Properties:
-      KeyId: !Ref QRGeneratorApiKey
+      KeyId: !Ref QRGeneratorDevApiKey
       KeyType: API_KEY
-      UsagePlanId: !Ref QRGeneratorUsagePlan
+      UsagePlanId: !Ref QRGeneratorDevUsagePlan
+
+  ProdUsagePlanKey:
+    Type: 'AWS::ApiGateway::UsagePlanKey'
+    DependsOn:
+      - ApiGatewayProdDeployment
+    Properties:
+      KeyId: !Ref QRGeneratorProdApiKey
+      KeyType: API_KEY
+      UsagePlanId: !Ref QRGeneratorProdUsagePlan
 
   LambdaApiGatewayInvokePermission:
     Type: AWS::Lambda::Permission
@@ -305,14 +338,13 @@ Resources:
         - arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${apiGatewayId}/*/*
         - apiGatewayId: !Ref QRGeneratorApi
 
-
-
-
 Outputs:
   LatestTimeStamp:
     Value: !Ref TimeStamp
-  ApiKeyId:
-    Value: !Ref QRGeneratorApiKey
+  DevApiKeyId:
+    Value: !Ref QRGeneratorDevApiKey
+  ProdApiKeyId:
+    Value: !Ref QRGeneratorProdApiKey
   ApiId:
     Value: !Ref QRGeneratorApi
   RootResourceId:
