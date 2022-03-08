@@ -13,7 +13,7 @@ qr_code_bucket = os.environ['QRCodeBucketName']
 
 
 def handler(event, context):
-    logger.info(event)
+    logger.info('Received event: {event}'.format(event=json.dumps(event)))
     stage = event['requestContext']['stage']
     request_body = json.loads(event['body'])
     qr_code_name = 'new-code' if 'qr-code-name' not in request_body else request_body['qr-code-name']
@@ -67,5 +67,5 @@ def handler(event, context):
         'body': json.dumps(response_body),
     }
 
-    logger.info(response)
+    logger.info('Response: {response}'.format(response=json.dumps(response)))
     return response
