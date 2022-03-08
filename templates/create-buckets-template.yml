@@ -24,45 +24,11 @@ Parameters:
   Email:
     Type: String
     Default: info@justinlmartin.com
-#  ArtifactBucketName:
-#    Type: String
-#    Default: '{{resolve:ssm:static-sites-pipeline-artifacts-bucket:1}}'
-#  DeploymentBucketName:
-#    Type: String
-#    Default: '{{resolve:ssm:static-sites-pipeline-deployment-bucket:1}}'
   LambdasBucketName:
     Type: String
     Default: '{{resolve:ssm:qr-generator-lambdas-bucket:1}}'
-#  SlackWebHookPath:
-#    Type: String
-#    Default: '{{resolve:secretsmanager:slack-webhook-paths:SecretString:static-sites-pipeline:1}}'
 
 Resources:
-
-# Buckets
-
-#  ArtifactStoreBucket:
-#    Type: AWS::S3::Bucket
-#    Properties:
-#      BucketName: !Ref ArtifactBucketName
-#      VersioningConfiguration:
-#        Status: Enabled
-#      BucketEncryption:
-#        ServerSideEncryptionConfiguration:
-#          - ServerSideEncryptionByDefault:
-#              SSEAlgorithm: AES256
-#
-#  DeploymentBucket:
-#    Type: AWS::S3::Bucket
-#    Properties:
-#      BucketName: !Ref DeploymentBucketName
-#      VersioningConfiguration:
-#        Status: Enabled
-#      BucketEncryption:
-#        ServerSideEncryptionConfiguration:
-#          - ServerSideEncryptionByDefault:
-#              SSEAlgorithm: AES256
-
   LambdasBucket:
     Type: AWS::S3::Bucket
     Properties:
